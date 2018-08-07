@@ -1,14 +1,12 @@
 package com.akafka.funcflow
 
 import akka.NotUsed
-import akka.stream.{FlowShape, Graph}
 import akka.stream.scaladsl.{Flow, GraphDSL, Merge, Partition}
-
-import scala.concurrent.{ExecutionContext, Future}
+import akka.stream.{FlowShape, Graph}
 
 object EitherFlow {
-  def apply[A, B, Z](func: A => Either[Z, B]) = {
-    new EitherFlow[A, B, Z] {
+  def apply[A, Z, B](func: A => Either[Z, B]) = {
+    new EitherFlow[A, Z, B] {
       override def function(in: A): Out = func(in)
     }
   }
@@ -18,12 +16,10 @@ object EitherFlow {
 // TODO: Materialized values
 // TODO: Other flow stages? mapAsync, mapConcat
 // These should be flow stages themselves...
-trait EitherFlow[A, B, Z] extends FlowFunction[A, Z] {
+trait EitherFlow[A, Z, B] extends FlowFunction[A, Z] {
   type In = Either[Z, A]
   type Out = Either[Z, B]
-  type Connector[C] = Either[Z, C]
-
-  def function(in: A): Out
+  type FuncOut = Out
 
   def wrappedFunction(in: In): Out = {
     in match {
@@ -32,18 +28,10 @@ trait EitherFlow[A, B, Z] extends FlowFunction[A, Z] {
     }
   }
 
-  def flow: Flow[In, Out, NotUsed] = Flow[In].map(wrappedFunction)
-  // This doesn't work because it renders the entire flow as one flow stage... instead of allowing for a synchronous
-  // flow stage to be added to an asynchronous one.
-  def flowAsync(parallelsim: Int)
-    (implicit ex: ExecutionContext): Flow[In, Out, NotUsed] = Flow[In].mapAsync(parallelsim) {
+  override def flow: Flow[In, Out, NotUsed] = Flow[In].map(wrappedFunction)
 
-    case Left(shortCut) => Future.successful(Left(shortCut))
-    case Right(expectedInput) => Future(function(expectedInput))
-  }
-
-  def map[C](flowFunc: EitherFlow[B, C, Z]): EitherFlow[A, C, Z] = {
-    EitherFlow[A, C, Z] { in: A =>
+  def map[C](flowFunc: EitherFlow[B, Z, C]): EitherFlow[A, Z, C] = {
+    EitherFlow[A, Z, C] { in: A =>
       this.function(in) match {
         case Left(shortCut) => Left(shortCut)
         case Right(expectedInput) => flowFunc.function(expectedInput)
@@ -60,7 +48,9 @@ trait EitherFlow[A, B, Z] extends FlowFunction[A, Z] {
     }
   }
 
-  // TODO: All vias should be like this (same return type?). We should also add some implicit magic so I can Flow.via(Gooch...)
+  // Note: Ordering IS NOT preserved here! If you need ordering, you must write your own FlowFunction that wraps
+  // the behavior you desire. However, for synchronous, ordered flow stages, this will not matter, and this function
+  // is safe to use. (TODO: Confirm this)
   def via[C](flow: Flow[B, Connector[C], _]): Graph[FlowShape[In, Connector[C]], NotUsed] = {
     GraphDSL.create() { implicit b =>
       import GraphDSL.Implicits._

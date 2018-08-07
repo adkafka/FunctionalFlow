@@ -17,6 +17,7 @@ object Unit {
 trait Unit[A, Z] extends FlowFunction[A, Z] {
   type In = Either[Z, A]
   type Out = Z
+  type FuncOut = Out
 
   def function(in: A): Z
 
@@ -27,5 +28,5 @@ trait Unit[A, Z] extends FlowFunction[A, Z] {
     }
   }
 
-  val flowStage: Flow[In, Z, NotUsed] = Flow[In].map(wrappedFunction)
+  def flow: Flow[In, Z, NotUsed] = Flow[In].map(wrappedFunction)
 }
