@@ -12,10 +12,6 @@ object EitherFlow {
   }
 }
 
-// TODO: Variance...
-// TODO: Materialized values
-// TODO: Other flow stages? mapAsync, mapConcat
-// These should be flow stages themselves...
 trait EitherFlow[A, Z, B] extends FlowFunction[A, Z] {
   type In = Either[Z, A]
   type Out = Either[Z, B]
@@ -30,7 +26,7 @@ trait EitherFlow[A, Z, B] extends FlowFunction[A, Z] {
 
   override def flow: Flow[In, Out, NotUsed] = Flow[In].map(wrappedFunction)
 
-  def map[C](flowFunc: EitherFlow[B, Z, C]): EitherFlow[A, Z, C] = {
+  def andThen[C](flowFunc: EitherFlow[B, Z, C]): EitherFlow[A, Z, C] = {
     EitherFlow[A, Z, C] { in: A =>
       this.function(in) match {
         case Left(shortCut) => Left(shortCut)
@@ -39,7 +35,7 @@ trait EitherFlow[A, Z, B] extends FlowFunction[A, Z] {
     }
   }
 
-  def map(unit: Unit[B, Z]): Unit[A, Z] = {
+  def andThen(unit: Unit[B, Z]): Unit[A, Z] = {
     Unit[A, Z] { in: A =>
       this.function(in) match {
         case Left(shortCut) => shortCut
@@ -49,8 +45,7 @@ trait EitherFlow[A, Z, B] extends FlowFunction[A, Z] {
   }
 
   // Note: Ordering IS NOT preserved here! If you need ordering, you must write your own FlowFunction that wraps
-  // the behavior you desire. However, for synchronous, ordered flow stages, this will not matter, and this function
-  // is safe to use. (TODO: Confirm this)
+  // the behavior you desire. (TODO: Confirm that simple flow stages also end up unordered)
   def via[C](flow: Flow[B, Connector[C], _]): Graph[FlowShape[In, Connector[C]], NotUsed] = {
     GraphDSL.create() { implicit b =>
       import GraphDSL.Implicits._

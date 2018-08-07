@@ -10,7 +10,7 @@ class FlowFunctionSpec extends FreeSpec with Matchers {
 
       val g =
         EitherFlow(dropLessThan5)
-          .map(EitherFlow(dropLessThan10))
+          .andThen(EitherFlow(dropLessThan10))
 
       g.function(1) shouldBe Left("less than 5")
       g.function(6) shouldBe Left("less than 10")
@@ -24,8 +24,8 @@ class FlowFunctionSpec extends FreeSpec with Matchers {
 
       val g =
         EitherFlow(dropLessThan5)
-          .map(EitherFlow(dropLessThan10))
-          .map(Unit(finalStage))
+          .andThen(EitherFlow(dropLessThan10))
+          .andThen(Unit(finalStage))
 
       g.function(1) shouldBe "less than 5"
       g.function(6) shouldBe "less than 10"
